@@ -1,0 +1,170 @@
+#!/usr/bin/env bash
+# brief: This script is used to check your pattern and checker correctness.
+# Author: Jyun-Wei, Su
+# Update: 2024/11/23
+# Version: 1.1 gui beautify print
+
+# Function to handle Ctrl-C
+cleanup() {
+    echo -e "\033[31m Script interrupted by user \033[0m"
+    exit 1
+}
+
+# Trap Ctrl-C (SIGINT)
+trap cleanup SIGINT
+
+FAIL_EXIT=0
+
+# clean
+echo -e "\033[44m Clean...\033[0m"
+echo ""
+sleep 1
+make clean > check.log
+
+#######################################################################
+# 00_run (PATTERN)
+#######################################################################
+echo -e "\033[44m***********************************************************************\033[0m"
+echo -e "\033[44m* Using TA's Design + Your PATTERNS and your CHECKER to check coverge *\033[0m"
+echo -e "\033[44m***********************************************************************\033[0m"
+echo ""
+
+PATTERN_FAIL_COUNT=0
+# 00_run_cov
+echo -e "\033[44m Running 00_run_cov...\033[0m"
+sleep 1
+make irun_cov define="CORRECT" > check.log
+if grep -i -q "Congratulations" 'irun.log'; then
+    echo -e "\033[32m--- CORRECT DESING check Pass ---\033[0m"
+else
+    PATTERN_FAIL_COUNT=$((PATTERN_FAIL_COUNT+1))
+    echo -e "\033[31m--- CORRECT DESING check Fail ---\033[0m"
+    if [ $FAIL_EXIT -eq 1 ]; then
+        exit 0
+    fi
+fi
+
+# 02_cov_detail
+echo -e "\033[44m Running 02_cov_detail...\033[0m"
+sleep 1
+make imc_detail > check.log
+# grep if any error
+if grep -i -q "Error" 'Report/Coverage_Detail.log'; then
+    PATTERN_FAIL_COUNT=$((PATTERN_FAIL_COUNT+1))
+    echo -e "\033[31m--- 02_cov_detail check Fail ---\033[0m"
+    if [ $FAIL_EXIT -eq 1 ]; then
+        exit 0
+    fi
+else 
+    echo -e "\033[32m--- 02_cov_detail Pass ---\033[0m"
+fi
+
+# 03_cov_summary
+echo -e "\033[44m Running 03_cov_summary...\033[0m"
+sleep 1
+make imc_summary > check.log
+# grep if any error
+if grep -i -q "Error" 'Report/Coverage_Summary.log'; then
+    PATTERN_FAIL_COUNT=$((PATTERN_FAIL_COUNT+1))
+    echo -e "\033[31m--- 03_cov_summary check Fail ---\033[0m"
+    if [ $FAIL_EXIT -eq 1 ]; then
+        exit 0
+    fi
+else
+    echo -e "\033[32m--- 03_cov_summary Pass ---\033[0m"
+fi
+
+# Check coverge 100.00%
+if grep -i -q "100.00%" 'check.log'; then
+    echo -e "\033[32m--- Coverge 100.00% check Pass ---\033[0m"
+else
+    PATTERN_FAIL_COUNT=$((PATTERN_FAIL_COUNT+1))
+    echo -e "\033[31m--- Coverge 100.00% check Fail ---\033[0m"
+    if [ $FAIL_EXIT -eq 1 ]; then
+        exit 0
+    fi
+fi
+
+# check fail case FAIL_1 ~ FAIL_4
+echo -e "\033[44m Check FAIL_1 ~ FAIL_4...\033[0m"
+sleep 1
+make clean > /dev/null
+
+for i in {1..4}
+do
+    make irun_cov -s -i define="FAIL_$i" > check.log
+    if grep -i -q "Wrong Answer" 'irun.log'; then
+        echo -e "\033[32m--- FAIL-CASE-$i check Pass ---\033[0m"
+    else
+        PATTERN_FAIL_COUNT=$((PATTERN_FAIL_COUNT+1))
+        echo -e "\033[31m--- FAIL-CASE-$i check Fail ---\033[0m"
+        if [ $FAIL_EXIT -eq 1 ]; then
+            exit 0
+        fi
+    fi
+done
+
+# if all pass
+if [ $PATTERN_FAIL_COUNT -eq 0 ]; then
+    echo -e "\033[42m--- 00_run all spec PASS !!! ---\033[0m"
+else
+    echo -e "\033[41m--- 00_run all spec FAIL !!! ---\033[0m"
+fi
+
+echo ""
+
+#######################################################################
+# 01_run (CHECKER)
+#######################################################################
+
+echo -e "\033[44m***********************************************************************\033[0m"
+echo -e "\033[44m* Using TA's Design + TA's PATTERNS to check your CHECKER correctness *\033[0m"
+echo -e "\033[44m***********************************************************************\033[0m"
+echo ""
+
+SPEC=(4 4 2 4 4 1 1 6 1)
+CHECKER_FAIL_COUNT=0
+# check ASSERTION SPEC
+echo -e "\033[44m Check all SPEC (01_run)...\033[0m"
+for ((i=1; i<=9; i++))
+do
+    LOCAL_FAIL_COUNT=0
+    for((j=1; j<=${SPEC[$i-1]}; j++))
+    do
+        #./01_run SPEC_$i\_$j > check.log
+        make irun_rtl -s -i define="SPEC_$i\_$j" > check.log
+        if  grep -i -q "Assertion $i is violated" 'irun.log'; then
+            echo -e "\033[32m--- SPEC-$i-$j check Pass ---\033[0m"
+        else
+            LOCAL_FAIL_COUNT=$((LOCAL_FAIL_COUNT+1))
+            CHECKER_FAIL_COUNT=$((CHECKER_FAIL_COUNT+1))
+            echo -e "\033[31m--- SPEC-$i-$j check Fail ---\033[0m"
+            # exit if FAIL_EXIT
+            if [ $FAIL_EXIT -eq 1 ]; then
+                exit 0
+            fi
+        fi
+    done
+    if [ $LOCAL_FAIL_COUNT -eq 0 ]; then
+        echo -e "\033[42m--- ASSERTION check SPEC-$i Pass ---\033[0m"
+    else
+        echo -e "\033[41m--- ASSERTION check SPEC-$i Fail ---\033[0m"
+    fi
+done
+
+# check CORRECT DESING
+make irun_rtl -s -i define=CORRECT > check.log
+if  grep -i -q "Congratulations" 'irun.log'; then
+    echo -e "\033[32m--- CORRECT DESING check Pass ---\033[0m"
+else
+    CHECKER_FAIL_COUNT=$((CHECKER_FAIL_COUNT+1))
+    echo -e "\033[31m--- CORRECT DESING check Fail ---\033[0m"
+    exit 0
+fi
+
+# if all pass
+if [ $CHECKER_FAIL_COUNT -eq 0 ]; then
+    echo -e "\033[42m--- 01_run all spec PASS !!! ---\033[0m"
+else
+    echo -e "\033[41m--- 01_run all spec FAIL !!! ---\033[0m"
+fi
